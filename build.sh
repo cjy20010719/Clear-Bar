@@ -15,7 +15,7 @@ if [[ -f /Library/Developer/CommandLineTools/usr/include/swift/module.modulemap 
 EOF
   taskCompileArgs=(-vfsoverlay "$taskSourceDir/local-overlay.yaml" -Xcc -ivfsoverlay -Xcc "$taskSourceDir/local-overlay.yaml")
 fi
-swiftc -O -target arm64-apple-macosx14.0 -sdk "$taskSDK" -module-cache-path "$taskCacheDir" "${taskCompileArgs[@]}" -import-objc-header "$taskSourceDir/PrivateBridge.h" "$taskSourceDir/Overlay.swift" "$taskSourceDir/main.swift" -framework Cocoa -framework QuartzCore -framework ImageIO -framework CoreImage -o "$taskOutputDir/Contents/MacOS/ClearBar"
+swiftc -O -target arm64-apple-macosx14.0 -sdk "$taskSDK" -module-cache-path "$taskCacheDir" "${taskCompileArgs[@]}" -import-objc-header "$taskSourceDir/PrivateBridge.h" "$taskSourceDir/Overlay.swift" "$taskSourceDir/main.swift" -framework Cocoa -framework QuartzCore -framework ImageIO -framework CoreImage -framework ServiceManagement -o "$taskOutputDir/Contents/MacOS/ClearBar"
 cp "$taskSourceDir/Info.plist" "$taskOutputDir/Contents/Info.plist"
 cp "$taskSourceDir/main.swift" "$taskSourceDir/Overlay.swift" "$taskSourceDir/PrivateBridge.h" "$taskSourceDir/Info.plist" "$taskSourceDir/build.sh" "$taskSourceDir/make_icns.py" "$taskSourceDir/empty-module.modulemap" "$taskOutputDir/Contents/Resources/Source/"
 if [[ -f "$taskSourceDir/AppIcon.png" ]]; then

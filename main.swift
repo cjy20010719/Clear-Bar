@@ -4,6 +4,7 @@ import QuartzCore
 import ImageIO
 import UniformTypeIdentifiers
 import CoreImage
+import ServiceManagement
 
 struct WallpaperItem: Codable {
     let id: String
@@ -71,7 +72,7 @@ final class ScreenOverlay {
     }
 }
 
-final class UnifiedMenuBar: NSObject, NSApplicationDelegate {
+final class UnifiedMenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let fm = FileManager.default
     private let defaults = UserDefaults.standard
     private lazy var root = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -92,6 +93,9 @@ final class UnifiedMenuBar: NSObject, NSApplicationDelegate {
     private var busy = false
     private var initialized = false
     private var status = "正在准备…"
+    private var loginItem: NSMenuItem?
+    private var loginDetailItem: NSMenuItem?
+    private var loginError: String?
 
     private var selected: WallpaperItem? { settings.items.first { $0.id == settings.selectedID } }
     private var sourceURL: URL? { selected.map { library.appendingPathComponent($0.fileName) } }
@@ -132,7 +136,6 @@ final class UnifiedMenuBar: NSObject, NSApplicationDelegate {
             }
             initialized = true
             makeMenu()
-            makeWindow()
             NotificationCenter.default.addObserver(self, selector: #selector(screenChanged), name: NSApplication.didChangeScreenParametersNotification, object: nil)
             for name in [NSWorkspace.screensDidWakeNotification, NSWorkspace.activeSpaceDidChangeNotification] {
                 NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(screenChanged), name: name, object: nil)
@@ -140,8 +143,8 @@ final class UnifiedMenuBar: NSObject, NSApplicationDelegate {
             DistributedNotificationCenter.default().addObserver(self, selector: #selector(screenChanged), name: .init("com.apple.screenIsUnlocked"), object: nil)
             refresh(force: true)
             timer = Timer.scheduledTimer(withTimeInterval: 2.5, repeats: true) { [weak self] _ in self?.refresh() }
-            showWindow()
-        } catch { setStatus("未启用：\(error.localizedDescription)"); makeMenu(); makeWindow(); showWindow() }
+            // Launch quietly, including at login. The panel is created only on request.
+        } catch { setStatus("未启用：\(error.localizedDescription)"); makeMenu() }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { showWindow(); return true }
@@ -404,12 +407,45 @@ final class UnifiedMenuBar: NSObject, NSApplicationDelegate {
         } else { setStatus("有屏幕未能恢复原图。请重试暂停，或到系统墙纸设置选择原图。") }
     }
 
+    @objc private func toggleLaunchAtLogin() {
+        loginError = nil
+        do {
+            switch SMAppService.mainApp.status {
+            case .enabled:
+                try SMAppService.mainApp.unregister()
+            case .requiresApproval:
+                SMAppService.openSystemSettingsLoginItems()
+            case .notRegistered, .notFound:
+                try SMAppService.mainApp.register()
+            @unknown default:
+                loginError = "无法读取登录项状态"
+            }
+        } catch {
+            loginError = "设置未完成：\(error.localizedDescription)"
+        }
+        updateLoginMenu()
+    }
+
+    private func updateLoginMenu() {
+        let serviceStatus = SMAppService.mainApp.status
+        loginItem?.state = serviceStatus == .enabled ? .on : .off
+        loginItem?.title = serviceStatus == .requiresApproval
+            ? "开机静默启动（需在系统设置允许）" : "开机静默启动"
+        let detail = loginError ?? (serviceStatus == .requiresApproval
+            ? "点击上方项目，在系统登录项中允许 Clear Bar" : nil)
+        loginDetailItem?.title = detail ?? ""
+        loginDetailItem?.isHidden = detail == nil
+    }
+
+    func menuWillOpen(_ menu: NSMenu) { updateLoginMenu() }
+
     private func makeMenu() {
         if statusItem == nil {
             statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
             statusItem?.button?.image = NSImage(systemSymbolName: "menubar.rectangle", accessibilityDescription: "Clear Bar")
         }
         let menu = NSMenu()
+        menu.delegate = self
         func add(_ title: String, _ action: Selector) {
             let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
             item.target = self
@@ -434,6 +470,17 @@ final class UnifiedMenuBar: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
         add(settings.paused || !conflictingApps().isEmpty ? "启用透明" : "暂停透明并恢复原图", #selector(togglePause))
         add("打开壁纸面板", #selector(showWindow))
+        let login = NSMenuItem(title: "开机静默启动", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
+        login.target = self
+        login.toolTip = "登录 Mac 后只显示菜单栏图标，不弹出页面"
+        menu.addItem(login)
+        loginItem = login
+        let detail = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        detail.isEnabled = false
+        menu.addItem(detail)
+        loginDetailItem = detail
+        updateLoginMenu()
+        menu.addItem(.separator())
         add("退出并恢复原图", #selector(quit))
         statusItem?.menu = menu
     }
