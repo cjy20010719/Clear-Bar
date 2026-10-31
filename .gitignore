@@ -1,0 +1,8 @@
+.DS_Store
+build/
+module-cache/
+backups/
+release-staging/
+*.app/
+*.log
+local-overlay.yaml
