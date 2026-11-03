@@ -1,1 +1,1 @@
-c2ef924d0f973f0204017d4a1637d9548bb85207fbb7678d9cd94e5e1eec9c18  Clear-Bar-macOS-arm64.zip
+4a30e17b5c767e2e62f4ab15b313121e6cc6b03aa1fa02eb798fe5519f200633  Clear-Bar-macOS-arm64.zip

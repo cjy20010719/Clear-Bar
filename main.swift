@@ -257,10 +257,21 @@ final class UnifiedMenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate {
         overlay.isOpaque = false
         overlay.backgroundColor = .clear
         overlay.hasShadow = false
+        // AppKit's inferred order-in/out zoom can expose the wallpaper's black
+        // base while only a small part of this blend has returned. Let Mission
+        // Control animate its own UI without a second animation on this window.
+        overlay.animationBehavior = .none
         overlay.level = .statusBar
         overlay.ignoresMouseEvents = true
-        overlay.collectionBehavior = [.canJoinAllSpaces, .fullScreenNone, .stationary, .ignoresCycle]
+        // The menu-bar blend must leave with the menu bar during Mission
+        // Control. Keeping it stationary paints a 24-point strip over the
+        // Spaces bar, whose background uses a different tint and blur.
+        overlay.collectionBehavior = [.canJoinAllSpaces, .fullScreenNone, .transient, .ignoresCycle]
         overlay.contentView = content
+        // Prepare the complete layer geometry before the first ordered frame.
+        content.layoutSubtreeIfNeeded()
+        overlay.displayIfNeeded()
+        CATransaction.flush()
         return ScreenOverlay(window: overlay, generatedURL: url, signature: signature)
     }
 
